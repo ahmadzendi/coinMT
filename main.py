@@ -3,13 +3,15 @@ import json
 import os
 import asyncio
 from datetime import datetime
+import pytz
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN_BOT = os.environ.get("TOKEN_BOT")
 CHAT_ID = os.environ.get("CHAT_ID")
-CHECK_INTERVAL = 15
+CHECK_INTERVAL = 10  # detik
 MT_STATUS_FILE = "mt_status.json"
+WIB = pytz.timezone('Asia/Jakarta')
 
 def get_pairs():
     url = "https://indodax.com/api/pairs"
@@ -41,22 +43,25 @@ async def maintenance_loop():
             for pair in pairs:
                 symbol = pair["symbol"]
                 is_mt = int(pair.get("is_maintenance", 0))
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now = datetime.now(WIB).strftime("%Y-%m-%d %H:%M:%S")
                 prev = last_status.get(symbol, 0)
                 if isinstance(prev, dict):
                     prev_status = prev.get("status", 0)
                 else:
                     prev_status = prev
 
+                # Notif masuk maintenance
                 if is_mt == 1 and prev_status != 1:
                     msg = f"⚠️ <b>{symbol}</b> masuk maintenance pada {now}"
                     print(msg)
                     await send_telegram(msg)
                     mt_now[symbol] = {"status": 1, "since": now}
+                # Notif keluar maintenance
                 elif is_mt == 0 and prev_status == 1:
                     msg = f"✅ <b>{symbol}</b> keluar dari maintenance pada {now}"
                     print(msg)
                     await send_telegram(msg)
+                # Pertahankan status lama jika masih mt
                 elif is_mt == 1 and prev_status == 1:
                     mt_now[symbol] = last_status[symbol]
             save_last_status(mt_now)
